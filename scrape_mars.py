@@ -7,226 +7,166 @@ import time
 from selenium import webdriver
 
 def init_browser():
-
     executable_path = {"executable_path": "chromedriver"}
     return Browser("chrome", **executable_path, headless = False)
 
-    #Mac Users
-    #executable_path = {'executable_path': '/usr/local/bin/chromedriver'}
-    #return Browser('chrome', **executable_path, headless=False)
+def scrape():
+    browser = init_browser()
+    mars_facts_data = {}
 
-# Create Mission to Mars global dictionary that can be imported into Mongo
-mars = {}
+    nasa = "https://mars.nasa.gov/news/"
+    browser.visit(nasa)
+    time.sleep(2)
 
-# NASA MARS NEWS
-def scrape_mars_news():
-    try: 
+    html = browser.html
+    soup = bs(html,"html.parser")
 
-        # Initialize browser 
-        browser = init_browser()
+    #scrapping latest news about mars from nasa
+    news_title = soup.find("div",class_="content_title").text
+    news_paragraph = soup.find("div", class_="article_teaser_body").text
+    mars_facts_data['news_title'] = news_title
+    mars_facts_data['news_paragraph'] = news_paragraph 
+    
+    #Mars Featured Image
+    nasa_image = "https://www.jpl.nasa.gov/spaceimages/?search=&category=featured#submit"
+    browser.visit(nasa_image)
+    time.sleep(2)
 
-        #browser.is_element_present_by_css("div.content_title", wait_time=1)
+    from urllib.parse import urlsplit
+    base_url = "{0.scheme}://{0.netloc}/".format(urlsplit(nasa_image))
+    
+    xpath = "//*[@id=\"page\"]/section[3]/div/ul/li[1]/a/div/div[2]/img"
 
-        # Visit Nasa news url through splinter module
-        nasa_url = 'https://mars.nasa.gov/news/'
-        browser.visit(nasa_url)
-        time.sleep(5)
+    #Use splinter to click on the mars featured image
+    #to bring the full resolution image
+    results = browser.find_by_xpath(xpath)
+    img = results[0]
+    img.click()
+    time.sleep(2)
+    
+    #get image url using BeautifulSoup
+    html_image = browser.html
+    soup = bs(html_image, "html.parser")
+    img_url = soup.find("img", class_="fancybox-image")["src"]
+    full_img_url = base_url + img_url
+    mars_facts_data["featured_image"] = full_img_url
+    
+    # #### Mars Weather
 
-        # HTML Object
-        html = browser.html
+    #get mars weather's latest tweet from the website
+    url_weather = "https://twitter.com/marswxreport?lang=en"
+    browser.visit(url_weather)
+    html_weather = browser.html
+    soup = bs(html_weather, "html.parser")
+    mars_weather = soup.find("p", class_="TweetTextSize TweetTextSize--normal js-tweet-text tweet-text").text
+    mars_facts_data["mars_weather"] = mars_weather
 
-        # Parse HTML with Beautiful Soup
-        soup = bs(html, 'html.parser')
-
-
-        # Retrieve the latest element that contains news title and news_paragraph
-        news_title = soup.find('div', class_='content_title').find('a').text
-        news_p = soup.find('div', class_='article_teaser_body').text
-
-        # Dictionary entry from MARS NEWS
-        mars['news_title'] = news_title
-        mars['news_paragraph'] = news_p
-
-        return mars
-
-    finally:
-
-        browser.quit()
-
-# FEATURED IMAGE
-def scrape_mars_image():
-
-    try: 
-
-        # Initialize browser 
-        browser = init_browser()
-
-        #browser.is_element_present_by_css("img.jpg", wait_time=1)
-
-        # Visit Mars Space Images through splinter module
-        image_url_featured = 'https://www.jpl.nasa.gov/spaceimages/?search=&category=Mars'
-        browser.visit(image_url_featured)# Visit Mars Space Images through splinter module
-        time.sleep(5)
-
-        # HTML Object 
-        html_image = browser.html
-
-        # Parse HTML with Beautiful Soup
-        soup = bs(html_image, 'html.parser')
-
-        # Retrieve background-image url from style tag 
-        featured_image_url  = soup.find('article')['style'].replace('background-image: url(','').replace(');', '')[1:-1]
-
-        # Website Url 
-        main_url = 'https://www.jpl.nasa.gov'
-
-        # Concatenate website url with scrapped route
-        featured_image_url = main_url + featured_image_url
-
-        # Display full link to featured image
-        featured_image_url 
-
-        # Dictionary entry from FEATURED IMAGE
-        mars['featured_image_url'] = featured_image_url 
-        
-        return mars
-    finally:
-
-        browser.quit()
-
-        
-
-# Mars Weather 
-def scrape_mars_weather():
-
-    try: 
-
-        # Initialize browser 
-        browser = init_browser()
-
-        #browser.is_element_present_by_css("div", wait_time=1)
-
-        # Visit Mars Weather Twitter through splinter module
-        weather_url = 'https://twitter.com/marswxreport?lang=en'
-        browser.visit(weather_url)
-        time.sleep(5)
-
-        # HTML Object 
-        html_weather = browser.html
-
-        # Parse HTML with Beautiful Soup
-        soup = bs(html_weather, 'html.parser')
-
-        # Find all elements that contain tweets
-        latest_tweets = soup.find_all('div', class_='js-tweet-text-container')
-
-        # Retrieve all elements that contain news title in the specified range
-        # Look for entries that display weather related words to exclude non weather related tweets 
-        for tweet in latest_tweets: 
-            weather_tweet = tweet.find('p').text
-            if 'Sol' and 'pressure' in weather_tweet:
-                print(weather_tweet)
-                break
-            else: 
-                pass
-
-        # Dictionary entry from WEATHER TWEET
-        mars['weather_tweet'] = weather_tweet
-        
-        return mars
-    finally:
-
-        browser.quit()
-
-
-# Mars Facts
-def scrape_mars_facts():
-
+    # #### Mars Facts
     # Visit Mars facts url 
-    facts_url = 'http://space-facts.com/mars/'
-
+    url_facts = "https://space-facts.com/mars/"
+    time.sleep(2)
     # Use Panda's `read_html` to parse the url
-    mars_facts = pd.read_html(facts_url)
+    table = pd.read_html(url_facts)
+    # Find the mars facts DataFrame in the list of DataFrames 
+    table[0]
 
-    # Find the mars facts DataFrame in the list of DataFrames as assign it to `mars_df`
-    mars_df = mars_facts[0]
-
+    df_mars_facts = table[0]
     # Assign the columns `['Description', 'Value']`
-    mars_df.columns = ['Description','Value']
-
+    df_mars_facts.columns = ["Description", "Values"]
     # Set the index to the `Description` column without row indexing
-    mars_df.set_index('Description', inplace=True)
-
+    clean_table = df_mars_facts.set_index(["Description"])
     # Save html code to folder Assets
-    data = mars_df.to_html()
+    mars_html_table = clean_table.to_html()
+    mars_html_table = mars_html_table.replace("\n", "")
+      # Dictionary entry from MARS FACTS
+    mars_facts_data["mars_facts_table"] = mars_html_table
 
-    # Dictionary entry from MARS FACTS
-    mars['mars_facts'] = data
+    # #### Mars Hemisperes
 
-    return mars
+    url_hemisphere = "https://astrogeology.usgs.gov/search/results?q=hemisphere+enhanced&k1=target&v1=Mars"
+    browser.visit(url_hemisphere)
 
-
-# MARS HEMISPHERES
-
-
-def scrape_mars_hemispheres():
-
-    try: 
-
-        # Initialize browser 
-        browser = init_browser()
-
-        # Visit hemispheres website through splinter module 
-        hemispheres_url = 'https://astrogeology.usgs.gov/search/results?q=hemisphere+enhanced&k1=target&v1=Mars'
-        browser.visit(hemispheres_url)
-        time.sleep(5)
-
-        # HTML Object
-        html_hemispheres = browser.html
-
-        # Parse HTML with Beautiful Soup
-        soup = bs(html_hemispheres, 'html.parser')
-
-        # Retreive all items that contain mars hemispheres information
-        items = soup.find_all('div', class_='item')
-
-        # Create empty list for hemisphere urls 
-        hemisphere_img_urls = []
-
-        # Store the main_ul 
-        hemispheres_main_url = 'https://astrogeology.usgs.gov' 
-
-        # Loop through the items previously stored
-        for i in items: 
-            # Store title
-            title = i.find('h3').text
-            
-            # Store link that leads to full image website
-            partial_img_url = i.find('a', class_='itemLink product-item')['href']
-            
-            # Visit the link that contains the full image website 
-            browser.visit(hemispheres_main_url + partial_img_url)
-            
-            # HTML Object of individual hemisphere information website 
-            partial_img_html = browser.html
-            
-            # Parse HTML with Beautiful Soup for every individual hemisphere information website 
-            soup = bs( partial_img_html, 'html.parser')
-            
-            # Retrieve full image source 
-            img_url = hemispheres_main_url + soup.find('img', class_='wide-image')['src']
-            
-            # Append the retreived information into a list of dictionaries 
-            hemisphere_img_urls.append({"title" : title, "img_url" : img_url})
-
-        mars['hemisphere_img_urls'] = hemisphere_img_urls
-
-        
-        # Return mars_data dictionary 
-
-        return mars
-    finally:
-
-        browser.quit()
+    #Getting the base url
+    hemisphere_base_url = "{0.scheme}://{0.netloc}/".format(urlsplit(url_hemisphere))
+    hemisphere_img_urls = []
+    hemisphere_img_urls
 
 
+    # #### Cerberus-Hemisphere-image-url
+
+    hemisphere_img_urls = []
+    results = browser.find_by_xpath( "//*[@id='product-section']/div[2]/div[1]/a/img").click()
+    time.sleep(2)
+    cerberus_open_click = browser.find_by_xpath( "//*[@id='wide-image-toggle']").click()
+    time.sleep(1)
+    cerberus_image = browser.html
+    soup = bs(cerberus_image, "html.parser")
+    cerberus_url = soup.find("img", class_="wide-image")["src"]
+    cerberus_img_url = hemisphere_base_url + cerberus_url
+    #print(cerberus_img_url)
+    cerberus_title = soup.find("h2",class_="title").text
+    #print(cerberus_title)
+    back_button = browser.find_by_xpath("//*[@id='splashy']/div[1]/div[1]/div[3]/section/a").click()
+    cerberus = {"image title":cerberus_title, "image url": cerberus_img_url}
+    hemisphere_img_urls.append(cerberus)
+
+
+    # #### Schiaparelli-Hemisphere-image-url
+
+    results1 = browser.find_by_xpath( "//*[@id='product-section']/div[2]/div[2]/a/img").click()
+    time.sleep(2)
+    schiaparelli_open_click = browser.find_by_xpath( "//*[@id='wide-image-toggle']").click()
+    time.sleep(1)
+    schiaparelli_image = browser.html
+    soup = bs(schiaparelli_image, "html.parser")
+    schiaparelli_url = soup.find("img", class_="wide-image")["src"]
+    schiaparelli_img_url = hemisphere_base_url + schiaparelli_url
+    #print(schiaparelli_img_url)
+    schiaparelli_title = soup.find("h2",class_="title").text
+    #print(schiaparelli_title)
+    back_button = browser.find_by_xpath("//*[@id='splashy']/div[1]/div[1]/div[3]/section/a").click()
+    schiaparelli = {"image title":schiaparelli_title, "image url": schiaparelli_img_url}
+    hemisphere_img_urls.append(schiaparelli)
+
+
+    # #### Syrtis Major Hemisphere
+
+    results1 = browser.find_by_xpath( "//*[@id='product-section']/div[2]/div[3]/a/img").click()
+    time.sleep(2)
+    syrtis_major_open_click = browser.find_by_xpath( "//*[@id='wide-image-toggle']").click()
+    time.sleep(1)
+    syrtis_major_image = browser.html
+    soup = bs(syrtis_major_image, "html.parser")
+    syrtis_major_url = soup.find("img", class_="wide-image")["src"]
+    syrtis_major_img_url = hemisphere_base_url + syrtis_major_url
+    #print(syrtis_major_img_url)
+    syrtis_major_title = soup.find("h2",class_="title").text
+    #print(syrtis_major_title)
+    back_button = browser.find_by_xpath("//*[@id='splashy']/div[1]/div[1]/div[3]/section/a").click()
+    syrtis_major = {"image title":syrtis_major_title, "image url": syrtis_major_img_url}
+    hemisphere_img_urls.append(syrtis_major)
+
+
+    # #### Valles Marineris Hemisphere
+
+    results1 = browser.find_by_xpath( "//*[@id='product-section']/div[2]/div[4]/a/img").click()
+    time.sleep(2)
+    valles_marineris_open_click = browser.find_by_xpath( "//*[@id='wide-image-toggle']").click()
+    time.sleep(1)
+    valles_marineris_image = browser.html
+    soup = bs(valles_marineris_image, "html.parser")
+    valles_marineris_url = soup.find("img", class_="wide-image")["src"]
+    valles_marineris_img_url = hemisphere_base_url + valles_marineris_url
+    #print(valles_marineris_img_url)
+    valles_marineris_title = soup.find("h2",class_="title").text
+    #print(valles_marineris_title)
+    back_button = browser.find_by_xpath("//*[@id='splashy']/div[1]/div[1]/div[3]/section/a").click()
+    valles_marineris = {"image title":valles_marineris_title, "image url": valles_marineris_img_url}
+    hemisphere_img_urls.append(valles_marineris)
+
+
+    mars_facts_data["hemisphere_img_url"] = hemisphere_img_urls
+
+    
+
+    return mars_facts_data
